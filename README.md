@@ -4,6 +4,10 @@
 
 Created by Ross Girshick at Microsoft Research, Redmond.
 
+Modified by Peng Tang to adapt training fast-rcnn by pseudo ground truths.
+
+The pseudo should be putted under the folder data/selective_search_data, and named as voc_2007_trainval_gt.mat (or voc_2012_trainval_gt.mat).
+
 ### Introduction
 
 **Fast R-CNN** is a fast framework for object detection with deep ConvNets. Fast R-CNN
