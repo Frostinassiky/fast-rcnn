@@ -21,53 +21,47 @@ import os
 
 def _get_image_blob(im):
     """Converts an image into a network input.
-
     Arguments:
         im (ndarray): a color image in BGR order
-
     Returns:
         blob (ndarray): a data blob holding an image pyramid
         im_scale_factors (list): list of image scales (relative to im) used
             in the image pyramid
+        im_shapes: the list of image shapes
     """
     im_orig = im.astype(np.float32, copy=True)
     im_orig -= cfg.PIXEL_MEANS
-
     im_shape = im_orig.shape
-    im_size_min = np.min(im_shape[0:2])
     im_size_max = np.max(im_shape[0:2])
-
     processed_ims = []
     im_scale_factors = []
 
     for target_size in cfg.TEST.SCALES:
-        im_scale = float(target_size) / float(im_size_min)
-        # Prevent the biggest axis from being more than MAX_SIZE
-        if np.round(im_scale * im_size_max) > cfg.TEST.MAX_SIZE:
-            im_scale = float(cfg.TEST.MAX_SIZE) / float(im_size_max)
+        im_scale = float(target_size) / float(im_size_max)
         im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale,
                         interpolation=cv2.INTER_LINEAR)
         im_scale_factors.append(im_scale)
-        processed_ims.append(im)
+        processed_ims.append(im_list_to_blob([im]))
 
-    # Create a blob to hold the input images
-    blob = im_list_to_blob(processed_ims)
-
+    blob = processed_ims
     return blob, np.array(im_scale_factors)
 
 def _get_rois_blob(im_rois, im_scale_factors):
     """Converts RoIs into network inputs.
-
     Arguments:
         im_rois (ndarray): R x 4 matrix of RoIs in original image coordinates
         im_scale_factors (list): scale factors as returned by _get_image_blob
-
     Returns:
         blob (ndarray): R x 5 matrix of RoIs in the image pyramid
     """
-    rois, levels = _project_im_rois(im_rois, im_scale_factors)
-    rois_blob = np.hstack((levels, rois))
-    return rois_blob.astype(np.float32, copy=False)
+    rois_blob_real = []
+
+    for i in xrange(len(im_scale_factors)):
+        rois, levels = _project_im_rois(im_rois, np.array([im_scale_factors[i]]))
+        rois_blob = np.hstack((levels, rois))
+        rois_blob_real.append(rois_blob.astype(np.float32, copy=False))
+
+    return rois_blob_real
 
 def _project_im_rois(im_rois, scales):
     """Project image RoIs into the image pyramid built by _get_image_blob.
@@ -170,40 +164,59 @@ def im_detect(net, im, boxes):
     # (some distinct image ROIs get mapped to the same feature ROI).
     # Here, we identify duplicate feature ROIs, so we only compute features
     # on the unique subset.
-    if cfg.DEDUP_BOXES > 0:
-        v = np.array([1, 1e3, 1e6, 1e9, 1e12])
-        hashes = np.round(blobs['rois'] * cfg.DEDUP_BOXES).dot(v)
-        _, index, inv_index = np.unique(hashes, return_index=True,
-                                        return_inverse=True)
-        blobs['rois'] = blobs['rois'][index, :]
-        boxes = boxes[index, :]
+    for i in xrange(len(blobs['data'])):
+        if cfg.DEDUP_BOXES > 0:
+            v = np.array([1, 1e3, 1e6, 1e9, 1e12])
+            hashes = np.round(blobs['rois'] * cfg.DEDUP_BOXES).dot(v)
+            _, index, inv_index = np.unique(hashes, return_index=True,
+                                            return_inverse=True)
+            blobs['rois'] = blobs['rois'][index, :]
+            boxes_tmp = boxes[index, :].copy()
+        else:
+            boxes_tmp = boxes.copy()
 
-    # reshape network inputs
-    net.blobs['data'].reshape(*(blobs['data'].shape))
-    net.blobs['rois'].reshape(*(blobs['rois'].shape))
-    blobs_out = net.forward(data=blobs['data'].astype(np.float32, copy=False),
-                            rois=blobs['rois'].astype(np.float32, copy=False))
-    if cfg.TEST.SVM:
-        # use the raw scores before softmax under the assumption they
-        # were trained as linear SVMs
-        scores = net.blobs['cls_score'].data
-    else:
-        # use softmax estimated probabilities
-        scores = blobs_out['cls_prob']
+        # reshape network inputs
+        net.blobs['data'].reshape(*(blobs['data'].shape))
+        net.blobs['rois'].reshape(*(blobs['rois'].shape))
+        blobs_out = net.forward(data=blobs['data'].astype(np.float32, copy=False),
+                                rois=blobs['rois'].astype(np.float32, copy=False))
+        if cfg.TEST.SVM:
+            # use the raw scores before softmax under the assumption they
+            # were trained as linear SVMs
+            scores_tmp = net.blobs['cls_score'].data
+        else:
+            # use softmax estimated probabilities
+            scores_tmp = blobs_out['cls_prob']
 
+        if cfg.TEST.BBOX_REG:
+            # Apply bounding-box regression deltas
+            box_deltas_tmp = blobs_out['bbox_pred']
+        else:
+            # Simply repeat the boxes, once for each class
+            pred_boxes = np.tile(boxes_tmp, (1, scores_tmp.shape[1]))
+
+        if cfg.DEDUP_BOXES > 0:
+            # Map scores and predictions back to the original set of boxes
+            scores_tmp = scores_tmp[inv_index, :]
+            if cfg.TEST.BBOX_REG:
+                box_deltas_tmp = box_deltas_tmp[inv_index, :]
+            else:
+                pred_boxes = pred_boxes[inv_index, :]
+
+        if i == 0:        
+            scores = np.copy(scores_tmp)
+            if cfg.TEST.BBOX_REG:
+                box_deltas = np.copy(box_deltas_tmp)
+        else:
+            scores += scores_tmp
+            if cfg.TEST.BBOX_REG:
+                box_deltas += box_deltas_tmp
+                
+    scores /= len(blobs['data'])
     if cfg.TEST.BBOX_REG:
-        # Apply bounding-box regression deltas
-        box_deltas = blobs_out['bbox_pred']
+        box_deltas /= len(blobs['data'])
         pred_boxes = _bbox_pred(boxes, box_deltas)
         pred_boxes = _clip_boxes(pred_boxes, im.shape)
-    else:
-        # Simply repeat the boxes, once for each class
-        pred_boxes = np.tile(boxes, (1, scores.shape[1]))
-
-    if cfg.DEDUP_BOXES > 0:
-        # Map scores and predictions back to the original set of boxes
-        scores = scores[inv_index, :]
-        pred_boxes = pred_boxes[inv_index, :]
 
     return scores, pred_boxes
 
