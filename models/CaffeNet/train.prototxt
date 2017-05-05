@@ -6,7 +6,8 @@ layer {
   top: 'rois'
   top: 'labels'
   top: 'bbox_targets'
-  top: 'bbox_loss_weights'
+  top: 'bbox_inside_weights'
+  top: 'bbox_outside_weights'
   python_param {
     module: 'roi_data_layer.layer'
     layer: 'RoIDataLayer'
@@ -327,7 +328,8 @@ layer {
   type: "SmoothL1Loss"
   bottom: "bbox_pred"
   bottom: "bbox_targets"
-  bottom: "bbox_loss_weights"
+  bottom: "bbox_inside_weights"
+  bottom: "bbox_outside_weights"
   top: "loss_bbox"
   loss_weight: 1
 }
