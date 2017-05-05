@@ -167,19 +167,19 @@ def im_detect(net, im, boxes):
     for i in xrange(len(blobs['data'])):
         if cfg.DEDUP_BOXES > 0:
             v = np.array([1, 1e3, 1e6, 1e9, 1e12])
-            hashes = np.round(blobs['rois'] * cfg.DEDUP_BOXES).dot(v)
+            hashes = np.round(blobs['rois'][i] * cfg.DEDUP_BOXES).dot(v)
             _, index, inv_index = np.unique(hashes, return_index=True,
                                             return_inverse=True)
-            blobs['rois'] = blobs['rois'][index, :]
+            blobs['rois'][i] = blobs['rois'][i][index, :]
             boxes_tmp = boxes[index, :].copy()
         else:
             boxes_tmp = boxes.copy()
 
         # reshape network inputs
-        net.blobs['data'].reshape(*(blobs['data'].shape))
-        net.blobs['rois'].reshape(*(blobs['rois'].shape))
-        blobs_out = net.forward(data=blobs['data'].astype(np.float32, copy=False),
-                                rois=blobs['rois'].astype(np.float32, copy=False))
+        net.blobs['data'].reshape(*(blobs['data'][i].shape))
+        net.blobs['rois'].reshape(*(blobs['rois'][i].shape))
+        blobs_out = net.forward(data=blobs['data'][i].astype(np.float32, copy=False),
+                                rois=blobs['rois'][i].astype(np.float32, copy=False))
         if cfg.TEST.SVM:
             # use the raw scores before softmax under the assumption they
             # were trained as linear SVMs
@@ -211,7 +211,7 @@ def im_detect(net, im, boxes):
             scores += scores_tmp
             if cfg.TEST.BBOX_REG:
                 box_deltas += box_deltas_tmp
-                
+
     scores /= len(blobs['data'])
     if cfg.TEST.BBOX_REG:
         box_deltas /= len(blobs['data'])

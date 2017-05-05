@@ -93,15 +93,18 @@ class RoIDataLayer(caffe.Layer):
 
         if cfg.TRAIN.BBOX_REG:
             self._name_to_top_map['bbox_targets'] = 3
-            self._name_to_top_map['bbox_loss_weights'] = 4
+            self._name_to_top_map['bbox_inside_weights'] = 4
+            self._name_to_top_map['bbox_outside_weights'] = 5
 
             # bbox_targets blob: R bounding-box regression targets with 4
             # targets per class
             top[3].reshape(1, self._num_classes * 4)
 
-            # bbox_loss_weights blob: At most 4 targets per roi are active;
+            # bbox_inside_weights blob: At most 4 targets per roi are active;
             # thisbinary vector sepcifies the subset of active targets
             top[4].reshape(1, self._num_classes * 4)
+
+            top[5].reshape(1, self._num_classes * 4)
 
     def forward(self, bottom, top):
         """Get blobs and copy them into this layer's top blob vector."""
