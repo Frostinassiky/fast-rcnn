@@ -7,7 +7,7 @@
 #SBATCH --array=1
 #SBATCH --mem=40960
 #SBATCH --cpus-per-task=2
-#SBATCH --gres=gpu:titan_x_p:1 -n 1 -N 1
+#SBATCH --gres=gpu:titan_x_m:1 -n 1 -N 1
 
 module purge
 module load slurm
