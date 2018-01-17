@@ -39,9 +39,12 @@ for top_k in np.arange(1000, 11000, 1000):
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""
-    if not __sets.has_key(name):
-        raise KeyError('Unknown dataset: {}'.format(name))
-    return __sets[name]()
+    if not name[-1].isdigit():
+        if not __sets.has_key(name):
+            raise KeyError('Unknown dataset: {}'.format(name))
+        return __sets[name]()
+    else:
+        return datasets.pascal_voc('trainval', '2007', data_folder="VOC2007_mr"+name[-1])
 
 def list_imdbs():
     """List all registered imdbs."""
