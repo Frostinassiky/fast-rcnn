@@ -3,6 +3,7 @@
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
+# Modified by Frost
 # --------------------------------------------------------
 
 import datasets
@@ -23,13 +24,16 @@ from fast_rcnn.config import cfg
 from scipy.sparse import vstack
 
 class pascal_voc(datasets.imdb):
-    def __init__(self, image_set, year, devkit_path=None):
-        datasets.imdb.__init__(self, 'voc_' + year + '_' + image_set)
+    def __init__(self, image_set, year, devkit_path=None, data_folder=None):
+        datasets.imdb.__init__(self, 'voc_' + year + '_' + image_set) if data_folder is None \
+            else datasets.imdb.__init__(self,  'voc_' + year + '_' + image_set + data_folder[-1])
         self._year = year
         self._image_set = image_set
+        self._data_folder = data_folder
         self._devkit_path = self._get_default_path() if devkit_path is None \
                             else devkit_path
-        self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)
+        self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year) if data_folder is None \
+            else os.path.join(self._devkit_path, data_folder) 
         self._classes = ('__background__', # always index 0
                          'aeroplane', 'bicycle', 'bird', 'boat',
                          'bottle', 'bus', 'car', 'cat', 'chair',
