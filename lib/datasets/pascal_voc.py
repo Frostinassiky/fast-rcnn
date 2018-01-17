@@ -20,6 +20,8 @@ import uuid
 from voc_eval import voc_eval
 from fast_rcnn.config import cfg
 
+from scipy.sparse import vstack
+
 class pascal_voc(datasets.imdb):
     def __init__(self, image_set, year, devkit_path=None):
         datasets.imdb.__init__(self, 'voc_' + year + '_' + image_set)
@@ -89,6 +91,35 @@ class pascal_voc(datasets.imdb):
         """
         return os.path.join(datasets.ROOT_DIR, 'data', 'VOCdevkit' + self._year)
 
+    ### add by yq
+    def generate_list(self, num_image, perc_labels):
+
+        import random
+
+        num_label = int(num_image * perc_labels)
+        mis_label = num_image - num_label
+        # print('num_label:', num_label)
+        # print('mis_label:', mis_label)
+
+        list_label = [1 for i in xrange(num_label)]
+        # print(list_label)
+        list_mis_label = [0 for j in xrange(mis_label)]
+        # print(list_mis_label)
+        list_label.extend(list_mis_label)
+        list = list_label
+        # print (list)
+        random.shuffle(list)
+        # print('num of list:', len(list))
+        #
+        # num_1 = list.count(1)
+        # num_0 = list.count(0)
+        # print('num of 1:', num_1)
+        # print('num of 0:', num_0)
+        # print('the percent of label:', float(num_1)/(num_1+num_0))
+
+        return list
+    ### end
+
     def gt_roidb(self):
         """
         Return the database of ground-truth regions of interest.
@@ -103,12 +134,50 @@ class pascal_voc(datasets.imdb):
             return roidb
 
         if self._image_set != 'test':
-            # gt_roidb = self._load_annotation(self.image_index)
-            gt_roidb = [self._load_pascal_annotation(index)
+            gt_roidb_mat = self._load_annotation(self.image_index)
+            gt_roidb_xml = [self._load_pascal_annotation(index)
                         for index in self.image_index]
+
+            # ### changed by yq
+            # # print (self.image_index)
+            #
+            # perct = 0.9
+            # gt_roidb = []
+            # list = self.generate_list(len(self.image_index), perct)
+            # for index in self.image_index:
+            #     print(self.image_index.index(index))
+            #     if list[self.image_index.index(index)] == 1:
+            #         gt_roidb.append(self._load_pascal_annotation(index))
+            #     else:
+            #         gt_roidb.append(gt_roidb_mat[self.image_index.index(index)])
+            # ### end
+
+            # combine two gts
+            gt_roidb = []
+
+            def combine_gts(gt1, gt2):
+                boxes = np.concatenate((gt1['boxes'], gt2['boxes']), axis=0)
+                boxes_vis = np.concatenate((gt1['boxes_vis'], gt2['boxes_vis']), axis=0)
+                # gt_classes = np.zeros((num_objs), dtype=np.int32)
+                gt_classes = np.concatenate((gt1['gt_classes'], gt2['gt_classes']), axis=0)
+                # overlaps = np.cancatenate((gt1['gt_overlaps'], gt2['gt_overlaps']), axis=0)
+                # overlaps_mat = gt1['gt_overlaps'].todense()
+                overlaps = vstack([gt1['gt_overlaps'], gt2['gt_overlaps']]).todense()
+                overlaps = scipy.sparse.csr_matrix(overlaps)
+                return {'boxes': boxes,
+                        'boxes_vis': boxes_vis,
+                        'gt_classes': gt_classes,
+                        'gt_overlaps': overlaps,
+                        'flipped': False}
+
+            print('num_image:',len(gt_roidb_mat))
+            for i in xrange(len(gt_roidb_mat)):
+                gt_roidb.append(combine_gts(gt_roidb_mat[i], gt_roidb_xml[i]))
+                # gt_roidb = gt_roidb1
         else:
             gt_roidb = [self._load_pascal_annotation(index)
                         for index in self.image_index]
+
         with open(cache_file, 'wb') as fid:
             cPickle.dump(gt_roidb, fid, cPickle.HIGHEST_PROTOCOL)
         print 'wrote gt roidb to {}'.format(cache_file)
@@ -152,16 +221,8 @@ class pascal_voc(datasets.imdb):
         raw_data = sio.loadmat(filename)['boxes'].ravel()
 
         box_list = []
-        index_list = '/home/zhangy/frost/mr_1/index.txt'
-        file_index = open(index_list, 'r')
-
-        event_list = []
-        for line in file_index:
-            event_list.append(line[0:-1])
-
         for i in xrange(raw_data.shape[0]):
-            if str(i) in event_list:
-                box_list.append(raw_data[i][:, (1, 0, 3, 2)] - 1)
+            box_list.append(raw_data[i][:, (1, 0, 3, 2)] - 1)
 
         return self.create_roidb_from_box_list(box_list, gt_roidb)
 
