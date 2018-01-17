@@ -217,9 +217,10 @@ class pascal_voc(datasets.imdb):
         return roidb
 
     def _load_selective_search_roidb(self, gt_roidb):
+        short_name = self.name if not self.name[-1].isdigit() else self.name[0:-1]
         filename = os.path.abspath(os.path.join(self.cache_path, '..',
                                                 'selective_search_data',
-                                                self.name + '.mat'))
+                                                short_name + '.mat'))
         assert os.path.exists(filename), \
                'Selective search data not found at: {}'.format(filename)
         raw_data = sio.loadmat(filename)['boxes'].ravel()
