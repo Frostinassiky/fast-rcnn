@@ -103,7 +103,9 @@ class pascal_voc(datasets.imdb):
             return roidb
 
         if self._image_set != 'test':
-            gt_roidb = self._load_annotation(self.image_index)
+            # gt_roidb = self._load_annotation(self.image_index)
+            gt_roidb = [self._load_pascal_annotation(index)
+                        for index in self.image_index]
         else:
             gt_roidb = [self._load_pascal_annotation(index)
                         for index in self.image_index]
@@ -134,7 +136,7 @@ class pascal_voc(datasets.imdb):
             ss_roidb = self._load_selective_search_roidb(gt_roidb)
             roidb = datasets.imdb.merge_roidbs(gt_roidb, ss_roidb)
         else:
-            roidb = self._load_selective_search_roidb(None)
+            roidb = self._load_selective_search_roidb_test(None)
         with open(cache_file, 'wb') as fid:
             cPickle.dump(roidb, fid, cPickle.HIGHEST_PROTOCOL)
         print 'wrote ss roidb to {}'.format(cache_file)
@@ -150,10 +152,34 @@ class pascal_voc(datasets.imdb):
         raw_data = sio.loadmat(filename)['boxes'].ravel()
 
         box_list = []
+        index_list = '/home/zhangy/frost/mr_1/index.txt'
+        file_index = open(index_list, 'r')
+
+        event_list = []
+        for line in file_index:
+            event_list.append(line[0:-1])
+
+        for i in xrange(raw_data.shape[0]):
+            if str(i) in event_list:
+                box_list.append(raw_data[i][:, (1, 0, 3, 2)] - 1)
+
+        return self.create_roidb_from_box_list(box_list, gt_roidb)
+
+    #added by yq
+    def _load_selective_search_roidb_test(self, gt_roidb):
+        filename = os.path.abspath(os.path.join(self.cache_path, '..',
+                                                'selective_search_data',
+                                                self.name + '.mat'))
+        assert os.path.exists(filename), \
+               'Selective search data not found at: {}'.format(filename)
+        raw_data = sio.loadmat(filename)['boxes'].ravel()
+
+        box_list = []
         for i in xrange(raw_data.shape[0]):
             box_list.append(raw_data[i][:, (1, 0, 3, 2)] - 1)
 
-        return self.create_roidb_from_box_list(box_list, gt_roidb)
+        return self.create_roidb_from_box_list_test(box_list, gt_roidb)
+    #end
 
     def selective_search_IJCV_roidb(self):
         """
@@ -211,6 +237,9 @@ class pascal_voc(datasets.imdb):
 
         gt_roidb = []
         for idx, index in enumerate(indexs):
+            print(idx)
+            print(image_list[0, idx])
+            print(index)
             assert image_list[0, idx] == index, 'the gt order is not same with txt file'
 
             boxes = np.zeros((0, 4), dtype=np.uint16)
@@ -222,18 +251,18 @@ class pascal_voc(datasets.imdb):
                 gt_shape = gt_matrix.shape
                 if gt_shape[1] == 0:
                     continue
-		gt_class = np.zeros((gt_shape[0]), dtype=np.int32)
-		gt_class[:] = self._class_to_ind[cls]
+                gt_class = np.zeros((gt_shape[0]), dtype=np.int32)
+                gt_class[:] = self._class_to_ind[cls]
                 overlap = np.zeros((gt_shape[0], self.num_classes), dtype=np.float32)
                 overlap[:, self._class_to_ind[cls]] = 1.0
-		# gt box in mat is ymin, xmin, ymax, xmax
-		# need convert to xmin, ymin, xmax, ymax
+                # gt box in mat is ymin, xmin, ymax, xmax
+                # need convert to xmin, ymin, xmax, ymax
                 boxes = np.vstack((boxes, gt_matrix[:,[1, 0, 3, 2]]-1))
                 gt_classes = np.hstack((gt_classes, gt_class))
                 overlaps = np.vstack((overlaps, overlap))
 
             overlaps = scipy.sparse.csr_matrix(overlaps)
-            gt_roidb.append({'boxes': boxes, 'gt_classes': gt_classes,'gt_overlaps': overlaps, 'flipped': False})
+            gt_roidb.append({'boxes': boxes, 'boxes_vis': boxes, 'gt_classes': gt_classes,'gt_overlaps': overlaps, 'flipped': False})
         return gt_roidb
 
     def _load_pascal_annotation(self, index):
@@ -272,6 +301,7 @@ class pascal_voc(datasets.imdb):
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
         return {'boxes' : boxes,
+                'boxes_vis': boxes,
                 'gt_classes': gt_classes,
                 'gt_overlaps' : overlaps,
                 'flipped' : False}
