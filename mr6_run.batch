@@ -1,0 +1,37 @@
+#!/bin/bash -l
+#SBATCH -t 3-24:00           # Specify Runtime in D-HH:MM  , for e.g 24 hrs.
+#SBATCH -J MISS_MR6          # Specify the job name syntax ApplicatioName-JobName
+#SBATCH -o SkyNet/%j_MISSVOC_mr6_out_%j        # Specify File to which standard out will be written
+#SBATCH -e SkyNet/MISSVOC_mr6_err_%j        # Specify File to which standard err will be written
+
+#SBATCH --array=1
+#SBATCH --mem=40960
+#SBATCH --cpus-per-task=2
+#SBATCH --gres=gpu:titan_x_p:1 -n 1 -N 1
+
+module purge
+module load slurm
+module load libs-extra
+module load libjpeg
+module load applications-extra
+
+#module load anaconda/2.3.0-caffe
+module load anaconda/2.4.2-vcc
+module load gcc
+module load boost/1.63.0a
+module unload gcc
+module load compilers-extra
+module load gcc/4.8.3
+module load cuda/8.0.44-cudNN5.1
+module load matlab/R2014a
+module load glog/0.3.4
+
+export LIBRARY_PATH=/usr/lib64/atlas:$LIBRARY_PATH
+#export LD_LIBRARY_PATH=/home/baiy0b/soft-nms/nccl/build/lib:$LD_LIBRARY_PATH
+#export LIBRARY_PATH=/home/baiy0b/soft-nms/nccl/build/lib:$LD_LIBRARY_PATH
+#export LIBRARY_PATH=/home/baiy0b/soft-nms/nccl/build/lib:$LIBRARY_PATH
+#export LIBRARY_PATH=/usr/lib64:/usr/lib64/atlas:$LIBRARY_PATH
+echo LIBRARY_PATH: $LIBRARY_PATH
+
+./experiments/scripts/mr6_vgg16.sh 0
+
