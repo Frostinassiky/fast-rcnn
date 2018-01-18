@@ -176,7 +176,10 @@ class pascal_voc(datasets.imdb):
 
             print('num_image:',len(gt_roidb_mat))
             for i in xrange(len(gt_roidb_mat)):
-                gt_roidb.append(combine_gts(gt_roidb_mat[i], gt_roidb_xml[i]))
+                if False: # combine two gts
+                    gt_roidb.append(combine_gts(gt_roidb_mat[i], gt_roidb_xml[i]))
+                else: # only use missed gt
+                    gt_roidb.append(gt_roidb_xml[i])
                 # gt_roidb = gt_roidb1
         else:
             gt_roidb = [self._load_pascal_annotation(index)
