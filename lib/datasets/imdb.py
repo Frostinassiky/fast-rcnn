@@ -55,6 +55,7 @@ class imdb(object):
     def roidb(self):
         # A roidb is a list of dictionaries, each with the following keys:
         #   boxes
+        #   boxes_vis
         #   gt_overlaps
         #   gt_classes
         #   flipped
@@ -93,21 +94,42 @@ class imdb(object):
 
     def append_flipped_images(self):
         num_images = self.num_images
+	print('Flipping '+str(num_images))
         widths = [PIL.Image.open(self.image_path_at(i)).size[0]
                   for i in xrange(num_images)]
         for i in xrange(num_images):
             boxes = self.roidb[i]['boxes'].copy()
             oldx1 = boxes[:, 0].copy()
+            oldx1 = np.minimum(oldx1, widths[i]-1)
             oldx2 = boxes[:, 2].copy()
+            oldx2 = np.minimum(oldx2, widths[i]-1)
             boxes[:, 0] = widths[i] - oldx2 - 1
             boxes[:, 2] = widths[i] - oldx1 - 1
+ 	    # print('-')
+            # print(self.roidb[i])
+            for k in xrange(len(oldx1)):
+		if boxes[k, 2] < boxes[k, 0]:
+                    print(boxes[k,0], boxes[k,2])
             assert (boxes[:, 2] >= boxes[:, 0]).all()
+            #add by yq
+	    # Modify by Frost
+            '''
+            boxes_vis = self.roidb[i]['boxes_vis'].copy()
+            oldx1 = boxes_vis[:, 0].copy()
+            oldx2 = boxes_vis[:, 2].copy()
+            boxes_vis[:, 0] = widths[i] - oldx2 - 1
+            boxes_vis[:, 2] = widths[i] - oldx1 - 1
+            assert (boxes[:, 2] >= boxes[:, 0]).all()
+            '''
+            #end
             entry = {'boxes' : boxes,
+                     # 'boxes_vis': boxes_vis,
                      'gt_overlaps' : self.roidb[i]['gt_overlaps'],
                      'gt_classes' : self.roidb[i]['gt_classes'],
                      'flipped' : True}
             self.roidb.append(entry)
         self._image_index = self._image_index * 2
+        print('Get images '+str(len(self.roidb)))
 
     def evaluate_recall(self, candidate_boxes, ar_thresh=0.5):
         # Record max overlap value for each gt box
@@ -159,6 +181,35 @@ class imdb(object):
             num_boxes = boxes.shape[0]
             overlaps = np.zeros((num_boxes, self.num_classes), dtype=np.float32)
 
+            if (gt_roidb is not None) and (len(gt_roidb[i]['boxes'])>0):
+                gt_boxes = gt_roidb[i]['boxes']
+                gt_classes = gt_roidb[i]['gt_classes']
+                gt_overlaps = bbox_overlaps(boxes.astype(np.float),
+                                            gt_boxes.astype(np.float))
+                argmaxes = gt_overlaps.argmax(axis=1)
+                maxes = gt_overlaps.max(axis=1)
+                I = np.where(maxes > 0)[0]
+                overlaps[I, gt_classes[argmaxes[I]]] = maxes[I]
+
+            overlaps = scipy.sparse.csr_matrix(overlaps)
+            roidb.append({'boxes' : boxes,
+                          # 'boxes_vis': gt_boxes,
+                          'gt_classes' : np.zeros((num_boxes,),
+                                                  dtype=np.int32),
+                          'gt_overlaps' : overlaps,
+                          'flipped' : False})
+        return roidb
+
+    #edd by yq
+    def create_roidb_from_box_list_test(self, box_list, gt_roidb):
+        assert len(box_list) == self.num_images, \
+                'Number of boxes must match number of ground-truth images'
+        roidb = []
+        for i in xrange(self.num_images):
+            boxes = box_list[i]
+            num_boxes = boxes.shape[0]
+            overlaps = np.zeros((num_boxes, self.num_classes), dtype=np.float32)
+
             if gt_roidb is not None:
                 gt_boxes = gt_roidb[i]['boxes']
                 gt_classes = gt_roidb[i]['gt_classes']
@@ -176,12 +227,15 @@ class imdb(object):
                           'gt_overlaps' : overlaps,
                           'flipped' : False})
         return roidb
+    #end
 
     @staticmethod
     def merge_roidbs(a, b):
         assert len(a) == len(b)
         for i in xrange(len(a)):
             a[i]['boxes'] = np.vstack((a[i]['boxes'], b[i]['boxes']))
+	    # display
+            # a[i]['boxes_vis'] = np.vstack((a[i]['boxes_vis'], b[i]['boxes_vis']))
             a[i]['gt_classes'] = np.hstack((a[i]['gt_classes'],
                                             b[i]['gt_classes']))
             a[i]['gt_overlaps'] = scipy.sparse.vstack([a[i]['gt_overlaps'],
