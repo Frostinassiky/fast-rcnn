@@ -100,9 +100,9 @@ class imdb(object):
         for i in xrange(num_images):
             boxes = self.roidb[i]['boxes'].copy()
             oldx1 = boxes[:, 0].copy()
-            oldx1 = np.minimum(oldx1, widths[i]-1)
+            #oldx1 = np.minimum(oldx1, widths[i]-1)
             oldx2 = boxes[:, 2].copy()
-            oldx2 = np.minimum(oldx2, widths[i]-1)
+            #oldx2 = np.minimum(oldx2, widths[i]-1)
             boxes[:, 0] = widths[i] - oldx2 - 1
             boxes[:, 2] = widths[i] - oldx1 - 1
  	    # print('-')
