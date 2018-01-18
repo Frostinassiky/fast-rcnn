@@ -97,6 +97,10 @@ def _compute_targets(rois, overlaps, labels):
 
     # Find which gt ROI each ex ROI has max overlap with:
     # this will be the ex ROI's gt target
+    
+    # if no gt, we do not set target
+    if len(ex_gt_overlaps)==0:
+        return np.zeros((rois.shape[0], 5), dtype=np.float32)
     gt_assignment = ex_gt_overlaps.argmax(axis=1)
     gt_rois = rois[gt_inds[gt_assignment], :]
     ex_rois = rois[ex_inds, :]
