@@ -11,6 +11,6 @@ echo Logging output to "$LOG"
 
 time ./tools/test_net.py --gpu $1 \
   --def models/VGG16/test.prototxt \
-  --net output/default/voc_2007_trainval9/vgg16_fast_rcnn_iter_40000.caffemodel \
+  --net output/default/voc_2007_trainval/vgg16_fast_rcnn_iter_40000.caffemodel \
   --imdb voc_2007_test
 
