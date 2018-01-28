@@ -176,7 +176,7 @@ class pascal_voc(datasets.imdb):
 
             print('num_image:',len(gt_roidb_mat))
             for i in xrange(len(gt_roidb_mat)):
-                if False: # combine two gts
+                if True: # combine two gts
                     gt_roidb.append(combine_gts(gt_roidb_mat[i], gt_roidb_xml[i]))
                 else: # only use missed gt
                     gt_roidb.append(gt_roidb_xml[i])
